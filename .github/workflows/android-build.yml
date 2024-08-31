@@ -51,10 +51,12 @@ jobs:
           libfribidi-dev \
           libxcb1-dev \
           ninja-build \
-          libgtk-3-dev
+          libgtk-3-dev \
+          libgl1-mesa-dev \
+          libglu1-mesa-dev
 
     - name: Install Pillow Separately
-      run: python -m pip install Pillow==9.2.0
+      run: python -m pip install Pillow>=10.0.0
 
     - name: Install Python Dependencies
       run: pip install -r requirements.txt
@@ -84,12 +86,15 @@ jobs:
         $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "build-tools;35.0.0" "platforms;android-33"
 
     - name: Run Flutter Doctor
-      run: flutter doctor
+      run: flutter doctor -v
 
     - name: Flet Build APK
       run: |
         flutter config --no-analytics
         flet build apk --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
+
+    - name: Log Errors
+      run: cat /tmp/flet_flutter_build_*/log.txt || true
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
