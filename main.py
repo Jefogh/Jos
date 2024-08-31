@@ -3,8 +3,7 @@ import io
 import random
 import requests
 import time
-import cv2
-import numpy as np
+from PIL import Image
 from flet import (
     Page, Text, ElevatedButton, TextField, Image as FletImage, Row, Column,
     Scrollable, Container, colors, alignment
@@ -179,20 +178,13 @@ class CaptchaApp:
         try:
             captcha_base64 = captcha_data.split(",")[1] if ',' in captcha_data else captcha_data
             captcha_image_data = base64.b64decode(captcha_base64)
-            nparr = np.frombuffer(captcha_image_data, np.uint8)
-            captcha_image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-            captcha_image = cv2.resize(captcha_image, (300, 150))
-
-            # Convert BGR to RGB for Flet display
-            captcha_image_rgb = cv2.cvtColor(captcha_image, cv2.COLOR_BGR2RGB)
-            _, captcha_image_buffer = cv2.imencode('.png', captcha_image_rgb)
-            captcha_image_bytes = captcha_image_buffer.tobytes()
+            captcha_image = Image.open(io.BytesIO(captcha_image_data))
+            captcha_image = captcha_image.resize((300, 150))
 
             if self.current_captcha_container:
                 self.page.remove(self.current_captcha_container)
 
-            captcha_image_flet = FletImage(src=captcha_image_bytes)
+            captcha_image_flet = FletImage(src=captcha_image_data)
             captcha_input = TextField(width=400)
 
             submit_button = ElevatedButton(
