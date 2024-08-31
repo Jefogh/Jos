@@ -1,39 +1,77 @@
-name: Android CI
+name: All Builds (Linux, macOS, Windows, Android, IPA, APK, AAB)
 
 on:
   push:
     branches:
-      - main  # يمكنك تعديل الفرع إذا كان لديك فرع مختلف
+      - master
+      - main
   pull_request:
     branches:
-      - main  # يمكنك تعديل الفرع إذا كان لديك فرع مختلف
+      - master
+      - main
+  workflow_dispatch:
+
+env:
+  BUILD_NUMBER: 1
+  BUILD_VERSION: 1.0.0
+  PYTHON_VERSION: 3.12.2
+  FLUTTER_VERSION: 3.22.2
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
-  build:
-
+  build-apk:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
+    - name: Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
       with:
-        distribution: 'temurin'
-        java-version: '17'
+        python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x ./gradlew
+    - name: Install Python Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
-    - name: Download dependencies
-      run: ./gradlew build --no-daemon
-
-    - name: Build APK
-      run: ./gradlew assembleRelease --no-daemon
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v3
+    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+      uses: subosito/flutter-action@v2
       with:
-        name: app-release.apk
-        path: app/build/outputs/apk/release/app-release.apk
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+
+    - name: Install Linux Build Dependencies
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y wget unzip build-essential libssl-dev libffi-dev python3-dev libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev libtiff5-dev tk-dev tcl-dev libopenjp2-7-dev libwebp-dev libharfbuzz-dev libfribidi-dev libxcb1-dev ninja-build libgtk-3-dev
+
+    - name: Cache Android SDK
+      uses: actions/cache@v3
+      with:
+        path: ${{ env.ANDROID_SDK_ROOT }}
+        key: ${{ runner.os }}-android-sdk-${{ hashFiles('**/build.gradle') }}
+        restore-keys: |
+          ${{ runner.os }}-android-sdk-
+
+    - name: Install Android SDK and Build Tools
+      run: |
+        wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O commandlinetools.zip
+        mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+        unzip commandlinetools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+        mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+        rm commandlinetools.zip
+        export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
+        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
+        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "build-tools;35.0.0" "platforms;android-33"
+
+    - name: Flet Build APK
+      run: |
+        flutter config --no-analytics
+        flet build apk --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: apk-build-artifact
+        path: build/app/outputs/apk/release/
+        if-no-files-found: warn
