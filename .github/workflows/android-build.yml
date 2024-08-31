@@ -28,7 +28,7 @@ jobs:
     - name: Setup Python ${{ env.PYTHON_VERSION }}
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ env.PYTHON_VERSION }}  # تحديث الإصدار هنا
+        python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Upgrade pip
       run: python -m pip install --upgrade pip
@@ -62,7 +62,7 @@ jobs:
           libxcb-render0-dev
 
     - name: Install Python Dependencies
-      run: pip install Pillow==9.5.0 flet==0.1.85 requests==2.31.0  # تثبيت التبعيات المتوافقة
+      run: pip install Pillow==9.5.0 flet==0.1.64 requests==2.31.0  # تحديث الإصدار إلى 0.1.64
 
     - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
       uses: subosito/flutter-action@v2
