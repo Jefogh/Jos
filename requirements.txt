@@ -1,3 +1,4 @@
-flet
-requests
-opencv-python
+Pillow==9.5.0
+flet==0.1.85
+requests==2.31.0
+
