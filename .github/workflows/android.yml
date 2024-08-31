@@ -58,7 +58,7 @@ jobs:
         flet build linux --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
 
     - name: Upload Linux Artifact
-      uses: actions/upload-artifact@v4.3.4
+      uses: actions/upload-artifact@v4
       with:
         name: linux-build-artifact
         path: build/linux
@@ -93,7 +93,7 @@ jobs:
         flet build macos --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
 
     - name: Upload macOS Artifact
-      uses: actions/upload-artifact@v4.3.4
+      uses: actions/upload-artifact@v4
       with:
         name: macos-build-artifact
         path: build/macos
@@ -128,7 +128,7 @@ jobs:
         flet build windows --verbose --no-rich-output --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
 
     - name: Upload Windows Artifact
-      uses: actions/upload-artifact@v4.3.4
+      uses: actions/upload-artifact@v4
       with:
         name: windows-build-artifact
         path: build/windows
@@ -163,7 +163,7 @@ jobs:
         flet build aab --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
 
     - name: Upload AAB Artifact
-      uses: actions/upload-artifact@v4.3.4
+      uses: actions/upload-artifact@v4
       with:
         name: aab-build-artifact
         path: build/aab
@@ -209,7 +209,7 @@ jobs:
         ls -R dist
 
     - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4.3.4
+      uses: actions/upload-artifact@v4
       with:
         name: apk-build-artifact
         path: dist/*.apk
@@ -244,7 +244,7 @@ jobs:
         flet build ipa --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
 
     - name: Upload IPA Artifact
-      uses: actions/upload-artifact@v4.3.4
+      uses: actions/upload-artifact@v4
       with:
         name: ipa-build-artifact
         path: build/ipa
