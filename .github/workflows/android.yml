@@ -39,11 +39,10 @@ jobs:
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
 
-    - name: Patch for linux build
+    - name: Install Linux Build Dependencies
       run: |
-        flutter doctor
         sudo apt-get update -y
-        sudo apt-get install -y ninja-build libgtk-3-dev
+        sudo apt-get install -y ninja-build libgtk-3-dev libjpeg-dev zlib1g-dev
         flutter doctor
 
     - name: Flet Build Linux
@@ -52,114 +51,11 @@ jobs:
         flet build linux --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
 
     - name: Upload Linux Artifact
-      uses: actions/upload-artifact@v4.3.4
+      uses: actions/upload-artifact@v4
       with:
         name: linux-build-artifact
         path: build/linux/release/bundle/
         if-no-files-found: warn
-        overwrite: false
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install Python Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-
-    - name: Flet Build macOS
-      run: |
-        flutter config --no-analytics
-        flet build macos --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
-
-    - name: Upload macOS Artifact
-      uses: actions/upload-artifact@v4.3.4
-      with:
-        name: macos-build-artifact
-        path: build/macos/Build/Products/Release/
-        if-no-files-found: warn
-        overwrite: false
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install Python Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-
-    - name: Flet Build Windows
-      run: |
-        flutter config --no-analytics
-        flet build windows --verbose --no-rich-output --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
-
-    - name: Upload Windows Artifact
-      uses: actions/upload-artifact@v4.3.4
-      with:
-        name: windows-build-artifact
-        path: build/windows/runner/Release/
-        if-no-files-found: warn
-        overwrite: false
-
-  build-aab:
-    runs-on: macos-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install Python Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-
-    - name: Flet Build AAB
-      run: |
-        flutter config --no-analytics
-        flet build aab --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
-
-    - name: Upload AAB Artifact
-      uses: actions/upload-artifact@v4.3.4
-      with:
-        name: aab-build-artifact
-        path: build/app/outputs/bundle/release/
-        if-no-files-found: warn
-        overwrite: false
 
   build-apk:
     runs-on: ubuntu-latest
@@ -182,11 +78,16 @@ jobs:
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
 
-    - name: Setup Java JDK
-      uses: actions/setup-java@v4.2.1
-      with:
-        distribution: 'temurin'
-        java-version: '21'
+    - name: Install Android SDK and Build Tools
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y wget unzip
+        wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdline-tools.zip
+        mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+        unzip cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+        rm cmdline-tools.zip
+        yes | $ANDROID_SDK_ROOT/cmdline-tools/tools/bin/sdkmanager --licenses
+        $ANDROID_SDK_ROOT/cmdline-tools/tools/bin/sdkmanager "platform-tools" "build-tools;35.0.0"
 
     - name: Flet Build APK
       run: |
@@ -194,49 +95,8 @@ jobs:
         flet build apk --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
 
     - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4.3.4
+      uses: actions/upload-artifact@v4
       with:
         name: apk-build-artifact
         path: build/app/outputs/apk/release/
         if-no-files-found: warn
-        overwrite: false
-
-  build-ipa:
-    runs-on: macos-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install Python Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: ${{ env.FLUTTER_VERSION }}
-
-    - name: Setup Java JDK
-      uses: actions/setup-java@v4.2.1
-      with:
-        distribution: 'temurin'
-        java-version: '21'
-
-    - name: Flet Build IPA
-      run: |
-        flutter config --no-analytics
-        flet build ipa --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
-
-    - name: Upload IPA Artifact
-      uses: actions/upload-artifact@v4.3.4
-      with:
-        name: ipa-build-artifact
-        path: build/ios/ipa/
-        if-no-files-found: warn
-        overwrite: false
