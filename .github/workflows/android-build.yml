@@ -55,11 +55,9 @@ jobs:
           libgl1-mesa-dev \
           libglu1-mesa-dev
 
-    - name: Install Pillow Separately
-      run: python -m pip install Pillow>=10.0.0
-
     - name: Install Python Dependencies
-      run: pip install -r requirements.txt
+      run: |
+        pip install -r requirements.txt
 
     - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
       uses: subosito/flutter-action@v2
