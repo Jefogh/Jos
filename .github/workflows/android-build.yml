@@ -1,4 +1,4 @@
-name: All Builds (Linux, macOS, Windows, Android, IPA, APK, AAB)
+name: Flet Build APK
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
 env:
   BUILD_NUMBER: 1
   BUILD_VERSION: 1.0.0
-  PYTHON_VERSION: 3.8
+  PYTHON_VERSION: 3.12.2
   FLUTTER_VERSION: 3.22.2
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
@@ -25,88 +25,48 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Python ${{ env.PYTHON_VERSION }}
+    - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Upgrade pip
-      run: python -m pip install --upgrade pip
-
-    - name: Install Linux Build Dependencies
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install -y \
-          build-essential \
-          libjpeg-dev \
-          zlib1g-dev \
-          libfreetype6-dev \
-          liblcms2-dev \
-          libopenjp2-7-dev \
-          libtiff5-dev \
-          tk-dev \
-          tcl-dev \
-          libwebp-dev \
-          libharfbuzz-dev \
-          libfribidi-dev \
-          libxcb1-dev \
-          libjpeg8-dev \
-          libpng-dev \
-          libglib2.0-dev \
-          ninja-build \
-          libgtk-3-dev \
-          libgl1-mesa-dev \
-          libglu1-mesa-dev \
-          libx11-dev \
-          libxcb-shm0-dev \
-          libxcb-render0-dev
-
     - name: Install Python Dependencies
-      run: pip install Pillow==9.5.0 flet==0.1.64 requests==2.31.0
+      run: |
+        python -m pip install --upgrade pip
+        pip install flet requests Pillow
 
-    - name: Setup Flutter ${{ env.FLUTTER_VERSION }}
+    - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
 
-    - name: Cache Android SDK
-      uses: actions/cache@v3
-      with:
-        path: ${{ env.ANDROID_SDK_ROOT }}
-        key: ${{ runner.os }}-android-sdk-${{ hashFiles('**/build.gradle') }}
-        restore-keys: |
-          ${{ runner.os }}-android-sdk-
+    - name: Install Linux Build Dependencies
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y wget unzip build-essential libssl-dev libffi-dev python3-dev libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev libtiff5-dev tk-dev tcl-dev libopenjp2-7-dev libwebp-dev libharfbuzz-dev libfribidi-dev libxcb1-dev ninja-build libgtk-3-dev
 
     - name: Install Android SDK and Build Tools
       run: |
         wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O commandlinetools.zip
-        mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-        unzip commandlinetools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
-        mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
-        rm commandlinetools.zip
+        sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+        sudo unzip -q commandlinetools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+        sudo mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
+        sudo rm commandlinetools.zip
         export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
         yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
         $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "build-tools;35.0.0" "platforms;android-33"
 
-    - name: Create Flutter Project
-      run: |
-        flutter create my_flutter_app
-        cd my_flutter_app
+    - name: Flutter Doctor
+      run: flutter doctor
 
-    - name: Run Flutter Doctor
+    - name: Flet Build APK
       run: |
-        cd my_flutter_app
-        flutter doctor -v
-
-    - name: Build APK
-      run: |
-        cd my_flutter_app
         flutter config --no-analytics
-        flutter build apk --release --verbose --build-number=${{ env.BUILD_NUMBER }} --build-name=${{ env.BUILD_VERSION }}
+        flet build apk --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: apk-build-artifact
-        path: my_flutter_app/build/app/outputs/apk/release/
+        path: build/app/outputs/apk/release/
         if-no-files-found: warn
