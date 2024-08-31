@@ -1,6 +1,3 @@
 flet
-opencv-python-headless
-numpy
+requests
 Pillow
-httpx
-easyocr
