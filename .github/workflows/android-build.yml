@@ -94,7 +94,7 @@ jobs:
     - name: Flet Build APK
       run: |
         flutter config --no-analytics
-        flet build apk --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
+        flutter build apk --release --verbose --build-number=${{ env.BUILD_NUMBER }} --build-name=${{ env.BUILD_VERSION }}
 
     - name: Log Errors
       run: cat /tmp/flet_flutter_build_*/log.txt || true
