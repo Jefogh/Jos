@@ -59,7 +59,7 @@ jobs:
     - name: Flet Build APK
       run: |
         flutter config --no-analytics
-        flet pack apk
+        flet build apk
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
