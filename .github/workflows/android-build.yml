@@ -38,6 +38,21 @@ jobs:
     - name: Show requirements.txt
       run: cat requirements.txt
 
+    - name: Install Required System Libraries for Pillow
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y \
+          libjpeg-dev \
+          zlib1g-dev \
+          libtiff-dev \
+          libfreetype6-dev \
+          liblcms2-dev \
+          libwebp-dev \
+          libopenjp2-7-dev \
+          libharfbuzz-dev \
+          libfribidi-dev \
+          libxcb1-dev
+
     - name: Create and activate virtual environment
       run: |
         python -m venv venv
