@@ -1,4 +1,3 @@
 Pillow
-flet
+flet-embed
 requests
-
