@@ -14,7 +14,7 @@ on:
 env:
   BUILD_NUMBER: 1
   BUILD_VERSION: 1.0.0
-  PYTHON_VERSION: 3.8  # Specify Python 3.8
+  PYTHON_VERSION: 3.8  # Use Python 3.8 for compatibility
   FLUTTER_VERSION: 3.22.2
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
@@ -35,7 +35,10 @@ jobs:
       run: |
         python -m pip install --upgrade pip setuptools wheel
 
-    - name: Install Required System Libraries
+    - name: Show requirements.txt
+      run: cat requirements.txt
+
+    - name: Install Required System Libraries for Pillow
       run: |
         sudo apt-get update -y
         sudo apt-get install -y \
@@ -51,12 +54,7 @@ jobs:
           libxcb1-dev \
           tk-dev \
           tcl-dev \
-          libffi-dev \
-          libjpeg8-dev \
-          libz-dev \
-          liblcms2-utils \
-          libwebpdemux2 \
-          libwebpmux3
+          libffi-dev
 
     - name: Create and activate virtual environment
       run: |
@@ -64,15 +62,13 @@ jobs:
         source venv/bin/activate
         pip install --upgrade pip setuptools wheel
         pip install -r requirements.txt
+        pip install pillow-simd==8.4.0.post0  # Install Pillow-SIMD
         pip install flet
-        pip install pillow-simd==8.4.0.post0  # Install Pillow-SIMD as an alternative
 
-    - name: Confirm Python Environment and Paths
+    - name: List installed Python packages
       run: |
         source venv/bin/activate
-        which python
-        python --version
-        echo $PATH
+        pip list
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
