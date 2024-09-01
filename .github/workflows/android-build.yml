@@ -13,7 +13,7 @@ on:
 
 env:
   PYTHON_VERSION: 3.11
-  FLUTTER_VERSION: 3.19.0  # Update to Flutter version 3.19.0 or above
+  FLUTTER_VERSION: 3.19.0  # Updated to a version that includes Dart SDK >=3.4.0
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
