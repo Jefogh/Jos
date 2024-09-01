@@ -42,11 +42,9 @@ jobs:
       run: |
         python -m venv venv
         source venv/bin/activate
-
-    - name: Install Python Dependencies
-      run: |
-        source venv/bin/activate
+        pip install --upgrade pip setuptools wheel
         pip install -r requirements.txt
+        pip install flet
 
     - name: List installed Python packages
       run: |
@@ -88,7 +86,7 @@ jobs:
     - name: Flet Build APK
       run: |
         source venv/bin/activate
-        flutter config --no-analytics
+        which flet  # Check if flet is in the path
         flet build apk --verbose --build-number=${{ env.BUILD_NUMBER }} --build-version=${{ env.BUILD_VERSION }}
 
     - name: Upload APK Artifact
