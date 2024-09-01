@@ -14,8 +14,8 @@ on:
 env:
   BUILD_NUMBER: 1
   BUILD_VERSION: 1.0.0
-  PYTHON_VERSION: 3.8  # Use Python 3.8 for compatibility
-  FLUTTER_VERSION: 3.7.0 # Replace with a compatible version if necessary
+  PYTHON_VERSION: 3.8  # استخدم Python 3.8 لضمان التوافق
+  FLUTTER_VERSION: 3.19.0 # تغيير إلى إصدار Flutter الصحيح
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
