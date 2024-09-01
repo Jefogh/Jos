@@ -14,8 +14,8 @@ on:
 env:
   BUILD_NUMBER: 1
   BUILD_VERSION: 1.0.0
-  PYTHON_VERSION: 3.8  # Using Python 3.8 for compatibility
-  FLUTTER_VERSION: 3.22.2
+  PYTHON_VERSION: 3.8  # Use Python 3.8 for compatibility
+  FLUTTER_VERSION: 3.7.0 # Replace with a compatible version if necessary
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
@@ -54,9 +54,7 @@ jobs:
           libxcb1-dev \
           tk-dev \
           tcl-dev \
-          libffi-dev \
-          build-essential \
-          pkg-config
+          libffi-dev
 
     - name: Create and activate virtual environment
       run: |
@@ -64,8 +62,8 @@ jobs:
         source venv/bin/activate
         pip install --upgrade pip setuptools wheel
         pip install -r requirements.txt
+        pip install pillow-simd==8.4.0.post0  # Install Pillow-SIMD
         pip install flet
-        pip install "pillow==9.5.0"  # Use a specific compatible version of Pillow
 
     - name: List installed Python packages
       run: |
