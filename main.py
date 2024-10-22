@@ -23,10 +23,11 @@ class TrainedModel:
         start_time = time.time()
         self.model = models.squeezenet1_0(weights=None)
         self.model.classifier[1] = nn.Conv2d(512, 30, kernel_size=(1, 1), stride=(1, 1))
-        model_path = "C:/Users/ccl/Desktop/trained_model.pth"
-        self.model.load_state_dict(torch.load(model_path, map_location=cpu_device, weights_only=True))
+        model_path = "quantized_model.pth"
+        self.model.load_state_dict(torch.load(model_path, map_location=cpu_device))
         self.model = self.model.to(cpu_device)
         self.model.eval()
+        self.model = torch.quantization.quantize_dynamic(self.model, {nn.Conv2d, nn.Linear}, dtype=torch.qint8)
         print(f"Model loaded in {time.time() - start_time:.4f} seconds")
 
     def predict(self, img):
@@ -400,20 +401,20 @@ class CaptchaApp:
     @staticmethod
     def generate_user_agent():
         user_agent_list = [
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (Linux; Android 11; SM-G996B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.210 Mobile Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0",
-        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36",
-        "Mozilla/5.0 (Linux; Android 10; Pixel 3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.101 Mobile Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.64",
-        "Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.2 Safari/605.1.15",
-        "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0",
-        "Mozilla/5.0 (Linux; Android 9; SAMSUNG SM-A505FN) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.111 Mobile Safari/537.36",
-        "Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1.2 Safari/605.1.15",
-        "Mozilla/5.0 (X11; FreeBSD amd64; rv:91.0) Gecko/20100101 Firefox/91.0"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
+        "Mozilla/5.0 (Linux; Android 12; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.131 Mobile Safari/537.36",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 15_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/109.0",
+        "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.55",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 13; Pixel 6 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.131 Mobile Safari/537.36",
+        "Mozilla/5.0 (iPad; CPU OS 15_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:116.0) Gecko/20100101 Firefox/116.0",
+        "Mozilla/5.0 (Linux; Android 10; SAMSUNG SM-N960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Mobile Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:117.0) Gecko/20100101 Firefox/117.0",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
     ]
 
         return random.choice(user_agent_list)
@@ -557,21 +558,18 @@ class CaptchaApp:
     @staticmethod
     def create_session(user_agent):
         headers = {
-            "User-Agent": user_agent,  # تعريف نوع العميل
-            "Accept": "application/json, text/plain, */*",  # قبول أنواع المحتوى المختلفة
-            "Accept-Language": "ar,en-US;q=0.7,en;q=0.3",  # تحديد اللغات المفضلة
-            "Referer": "https://ecsc.gov.sy/login",  # الصفحة الأصلية للطلب
-            "Content-Type": "application/json",  # نوع المحتوى المرسل
-            "Source": "WEB",  # مصدر الطلب
-            "Origin": "https://ecsc.gov.sy",  # المصدر الأساسي للطلب
-            "Connection": "keep-alive",  # الحفاظ على الاتصال مفتوحًا لتحسين الأداء
-            "Priority": "u=1",  # أولوية عالية (تجريبي)
-            "X-Priority": "1",  # أولوية قصوى للطلب
-            "Accept-Encoding": "gzip, deflate, br",  # ضغط البيانات لتسريع النقل
-            "Cache-Control": "no-cache, no-store, must-revalidate",  # منع التخزين المؤقت لضمان بيانات محدثة
-            "X-DNS-Prefetch-Control": "on",  # تحسين زمن الاستجابة عبر جلب DNS مسبقًا
-            "TE": "trailers",  # تحسين التعامل مع محتويات الرد
-            "Pragma": "no-cache",  # منع التخزين المؤقت على مستوى المتصفح
+            "User-Agent": user_agent,
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "ar,en-US;q=0.7,en;q=0.3",
+            "Referer": "https://ecsc.gov.sy/login",
+            "Content-Type": "application/json",
+            "Source": "WEB",
+            "Origin": "https://ecsc.gov.sy",
+            "Connection": "keep-alive",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-site",
+            "Priority": "u=1",
         }
         session = requests.Session()
         session.headers.update(headers)
