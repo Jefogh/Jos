@@ -1,4 +1,4 @@
-name: Build Linux Desktop Application
+name: Build Windows Desktop Application
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # تغيير النظام إلى Ubuntu (متوافق مع Linux Mint)
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -26,13 +26,13 @@ jobs:
       - name: Build executable with PyInstaller
         run: |
           pip install pyinstaller  # تأكد من تثبيت PyInstaller
-          pyinstaller --onefile --windowed --name salkhhm main.py  # بناء الملف القابل للتنفيذ
+          pyinstaller --onefile --windowed --name salkhhm main.py
 
       - name: List dist directory contents
-        run: ls dist  # استخدام `ls` بدلاً من `dir` في Linux
+        run: dir dist
 
       - name: Upload Executable
         uses: actions/upload-artifact@v3
         with:
           name: salkhhm-Executable
-          path: dist/salkhhm  # لا تحتاج لامتداد exe في Linux
+          path: dist/salkhhm.exe
