@@ -23,11 +23,10 @@ class TrainedModel:
         start_time = time.time()
         self.model = models.squeezenet1_0(weights=None)
         self.model.classifier[1] = nn.Conv2d(512, 30, kernel_size=(1, 1), stride=(1, 1))
-        model_path = "quantized_model.pth"
-        self.model.load_state_dict(torch.load(model_path, map_location=cpu_device))
+        model_path = "C:/Users/ccl/Desktop/trained_model.pth"
+        self.model.load_state_dict(torch.load(model_path, map_location=cpu_device, weights_only=True))
         self.model = self.model.to(cpu_device)
         self.model.eval()
-        self.model = torch.quantization.quantize_dynamic(self.model, {nn.Conv2d, nn.Linear}, dtype=torch.qint8)
         print(f"Model loaded in {time.time() - start_time:.4f} seconds")
 
     def predict(self, img):
@@ -119,6 +118,16 @@ class CaptchaApp:
 
         self.load_model()
         self.setup_ui()
+        # إضافة مستمع للأزرار
+        self.root.bind('<Control-Key-1>', self.handle_ctrl_1)
+
+    def handle_ctrl_1(self, event):
+        """محاكاة الضغط على أول زر لطلب الكابتشا عند الضغط على Control + 1"""
+        username = list(self.accounts.keys())[0]  # اختيار أول حساب (يمكن تعديل هذا حسب الحاجة)
+        captcha_id1 = self.accounts[username]["captcha_id1"]
+        if captcha_id1:
+            self.request_captcha(username, captcha_id1, None)
+
 
     def load_model(self):
         print("Loading model...")
@@ -344,12 +353,12 @@ class CaptchaApp:
         captcha_label.grid(row=0, column=0, padx=10, pady=10)
 
     def remove_background_keep_original_colors(self, captcha_image, background_image):
-        # 1. تقليل الدقة لتسريع العملية
-        scale_factor = 0.5
+        # 1. تقليل الدقة بشكل أكبر لتسريع العملية
+        scale_factor = 0.25  # تقليل الدقة بشكل أكبر لتحسين السرعة
         captcha_image = cv2.resize(captcha_image, (0, 0), fx=scale_factor, fy=scale_factor)
         background_image = cv2.resize(background_image, (0, 0), fx=scale_factor, fy=scale_factor)
 
-        # 2. إذا كان GPU مدعومًا، استخدم CUDA لإزالة الخلفية
+        # 2. إذا كان GPU مدعومًا، استخدم CUDA
         if cv2.cuda.getCudaEnabledDeviceCount() > 0:
             captcha_image_gpu = cv2.cuda_GpuMat()
             background_image_gpu = cv2.cuda_GpuMat()
@@ -361,7 +370,7 @@ class CaptchaApp:
             diff_gpu = cv2.cuda.absdiff(captcha_image_gpu, background_image_gpu)
             diff = diff_gpu.download()
 
-            # تحويل الفرق إلى صورة رمادية
+            # تحويل الفرق إلى صورة رمادية باستخدام GPU
             gray_gpu = cv2.cuda.cvtColor(diff_gpu, cv2.COLOR_BGR2GRAY)
             gray = gray_gpu.download()
 
@@ -378,11 +387,19 @@ class CaptchaApp:
 
             return result
         else:
-            # إذا لم يكن GPU مدعومًا، نستخدم الطريقة العادية
+            # إذا لم يكن GPU مدعومًا، استخدم الطريقة العادية على المعالج (CPU)
+            # حساب الفرق بين الصورتين
             diff = cv2.absdiff(captcha_image, background_image)
+
+            # تحويل الفرق إلى صورة رمادية
             gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+
+            # تطبيق العتبة (threshold) على الصورة الرمادية
             _, mask = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
+
+            # إزالة الخلفية مع الحفاظ على الألوان الأصلية
             result = cv2.bitwise_and(captcha_image, captcha_image, mask=mask)
+
             return result
 
     def submit_captcha(self, username, captcha_id, captcha_solution):
@@ -401,20 +418,20 @@ class CaptchaApp:
     @staticmethod
     def generate_user_agent():
         user_agent_list = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15",
-        "Mozilla/5.0 (Linux; Android 12; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.131 Mobile Safari/537.36",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 15_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/109.0",
-        "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.55",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Linux; Android 13; Pixel 6 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.131 Mobile Safari/537.36",
-        "Mozilla/5.0 (iPad; CPU OS 15_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:116.0) Gecko/20100101 Firefox/116.0",
-        "Mozilla/5.0 (Linux; Android 10; SAMSUNG SM-N960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Mobile Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.1 Safari/605.1.15",
-        "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:117.0) Gecko/20100101 Firefox/117.0",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (Linux; Android 11; SM-G996B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.210 Mobile Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0",
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 10; Pixel 3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.101 Mobile Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.64",
+        "Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.2 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0",
+        "Mozilla/5.0 (Linux; Android 9; SAMSUNG SM-A505FN) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.111 Mobile Safari/537.36",
+        "Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1.2 Safari/605.1.15",
+        "Mozilla/5.0 (X11; FreeBSD amd64; rv:91.0) Gecko/20100101 Firefox/91.0"
     ]
 
         return random.choice(user_agent_list)
