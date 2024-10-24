@@ -5,3 +5,5 @@ opencv-python
 pillow
 requests
 pyinstaller
+openvino
+openvino-dev
