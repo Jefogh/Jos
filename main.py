@@ -17,51 +17,71 @@ from datetime import datetime, timedelta
 
 cpu_device = torch.device("cpu")
 
-
 class TrainedModel:
     def __init__(self):
+        # تحميل النموذج المدرب مرة واحدة فقط عند إنشاء الكائن
         start_time = time.time()
-        self.model = models.squeezenet1_0(weights=None)
-        self.model.classifier[1] = nn.Conv2d(512, 30, kernel_size=(1, 1), stride=(1, 1))
-        model_path = "C:/Users/ccl/Desktop/trained_model.pth"
-        self.model.load_state_dict(torch.load(model_path, map_location=cpu_device, weights_only=True))
-        self.model = self.model.to(cpu_device)
+        
+        # استخدام وحدة المعالجة المركزية دائماً
+        self.device = torch.device("cpu")
+
+        # استخدام MobileNetV3-Small بدلاً من SqueezeNet لتحقيق كفاءة أعلى
+        self.model = models.mobilenet_v3_small(pretrained=False)
+        self.model.classifier[3] = nn.Linear(self.model.classifier[3].in_features, 23)
+
+        # مسار النموذج المدرب
+        model_path = "C:/Users/ccl/Desktop/trained_model_mobilenet.pth"
+        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+
+        # وضع النموذج في وضع التقييم وإرساله إلى الجهاز الصحيح (CPU)
+        self.model = self.model.to(self.device)
         self.model.eval()
+
         print(f"Model loaded in {time.time() - start_time:.4f} seconds")
 
     def predict(self, img):
         start_time = time.time()
-        resized_image = cv2.resize(img, (160, 90))
-        print(f"Image resizing (OpenCV) took {time.time() - start_time:.4f} seconds")
 
-        pil_image = Image.fromarray(cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB))
+        # تغيير حجم الصورة باستخدام PIL بدلاً من OpenCV لمزيد من الكفاءة في هذه الحالة
+        pil_image = Image.fromarray(img).resize((160, 90))
+
         preprocess = transforms.Compose([
-            transforms.Grayscale(num_output_channels=3),
+            transforms.Grayscale(num_output_channels=3),  # تحويل الصورة إلى 3 قنوات (الرمادي)
             transforms.ToTensor(),
             transforms.Normalize([0.5], [0.5], [0.5]),
         ])
-        tensor_image = preprocess(pil_image).unsqueeze(0).to(cpu_device)
+        
+        tensor_image = preprocess(pil_image).unsqueeze(0).to(self.device)
+
         print(f"Image preprocessing took {time.time() - start_time:.4f} seconds")
 
+        # توقع النتيجة باستخدام النموذج
         start_time = time.time()
-        with torch.no_grad():
-            outputs = self.model(tensor_image).view(-1, 30)
+        with torch.no_grad():  # ضمان عدم حفظ التدرجات لتحسين الأداء
+            outputs = self.model(tensor_image).view(-1, 23)  # نموذج مع 23 تصنيف (10 أرقام، 3 عمليات، 10 أرقام)
+        
         print(f"Model prediction took {time.time() - start_time:.4f} seconds")
 
-        num1_preds = outputs[:, :10]
-        operation_preds = outputs[:, 10:13]
-        num2_preds = outputs[:, 13:]
+        # استخراج التوقعات لكل جزء من العملية الحسابية
+        num1_preds = outputs[:, :10]      # توقع الرقم الأول
+        operation_preds = outputs[:, 10:13]  # توقع العملية (جمع، طرح، ضرب)
+        num2_preds = outputs[:, 13:]      # توقع الرقم الثاني
 
+        # استخراج النتائج النهائية
         _, num1_predicted = torch.max(num1_preds, 1)
         _, operation_predicted = torch.max(operation_preds, 1)
         _, num2_predicted = torch.max(num2_preds, 1)
 
+        # تحويل العمليات إلى الرموز المناسبة
         operation_map = {0: "+", 1: "-", 2: "×"}
         predicted_operation = operation_map[operation_predicted.item()]
 
+        # تحرير الموارد غير الضرورية بعد الاستخدام
         del tensor_image
-        return num1_predicted.item(), predicted_operation, num2_predicted.item()
+        torch.cuda.empty_cache()
 
+        # إعادة النتيجة النهائية
+        return num1_predicted.item(), predicted_operation, num2_predicted.item()
 
 class ExpandingCircle:
     def __init__(self, canvas, x, y, max_radius, color):
@@ -118,16 +138,6 @@ class CaptchaApp:
 
         self.load_model()
         self.setup_ui()
-        # إضافة مستمع للأزرار
-        self.root.bind('<Control-Key-1>', self.handle_ctrl_1)
-
-    def handle_ctrl_1(self, event):
-        """محاكاة الضغط على أول زر لطلب الكابتشا عند الضغط على Control + 1"""
-        username = list(self.accounts.keys())[0]  # اختيار أول حساب (يمكن تعديل هذا حسب الحاجة)
-        captcha_id1 = self.accounts[username]["captcha_id1"]
-        if captcha_id1:
-            self.request_captcha(username, captcha_id1, None)
-
 
     def load_model(self):
         print("Loading model...")
@@ -353,12 +363,12 @@ class CaptchaApp:
         captcha_label.grid(row=0, column=0, padx=10, pady=10)
 
     def remove_background_keep_original_colors(self, captcha_image, background_image):
-        # 1. تقليل الدقة بشكل أكبر لتسريع العملية
-        scale_factor = 0.25  # تقليل الدقة بشكل أكبر لتحسين السرعة
+        # 1. تقليل الدقة لتسريع العملية
+        scale_factor = 0.3
         captcha_image = cv2.resize(captcha_image, (0, 0), fx=scale_factor, fy=scale_factor)
         background_image = cv2.resize(background_image, (0, 0), fx=scale_factor, fy=scale_factor)
 
-        # 2. إذا كان GPU مدعومًا، استخدم CUDA
+        # 2. إذا كان GPU مدعومًا، استخدم CUDA لإزالة الخلفية
         if cv2.cuda.getCudaEnabledDeviceCount() > 0:
             captcha_image_gpu = cv2.cuda_GpuMat()
             background_image_gpu = cv2.cuda_GpuMat()
@@ -370,7 +380,7 @@ class CaptchaApp:
             diff_gpu = cv2.cuda.absdiff(captcha_image_gpu, background_image_gpu)
             diff = diff_gpu.download()
 
-            # تحويل الفرق إلى صورة رمادية باستخدام GPU
+            # تحويل الفرق إلى صورة رمادية
             gray_gpu = cv2.cuda.cvtColor(diff_gpu, cv2.COLOR_BGR2GRAY)
             gray = gray_gpu.download()
 
@@ -387,19 +397,11 @@ class CaptchaApp:
 
             return result
         else:
-            # إذا لم يكن GPU مدعومًا، استخدم الطريقة العادية على المعالج (CPU)
-            # حساب الفرق بين الصورتين
+            # إذا لم يكن GPU مدعومًا، نستخدم الطريقة العادية
             diff = cv2.absdiff(captcha_image, background_image)
-
-            # تحويل الفرق إلى صورة رمادية
             gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-
-            # تطبيق العتبة (threshold) على الصورة الرمادية
             _, mask = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
-
-            # إزالة الخلفية مع الحفاظ على الألوان الأصلية
             result = cv2.bitwise_and(captcha_image, captcha_image, mask=mask)
-
             return result
 
     def submit_captcha(self, username, captcha_id, captcha_solution):
