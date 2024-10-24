@@ -368,7 +368,7 @@ class CaptchaApp:
 
     def remove_background_keep_original_colors(self, captcha_image, background_image):
         # 1. تقليل الدقة لتسريع العملية
-        scale_factor = 0.3
+        scale_factor = 0.25
         captcha_image = cv2.resize(captcha_image, (0, 0), fx=scale_factor, fy=scale_factor)
         background_image = cv2.resize(background_image, (0, 0), fx=scale_factor, fy=scale_factor)
 
