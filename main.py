@@ -17,18 +17,12 @@ from datetime import datetime, timedelta
 
 cpu_device = torch.device("cpu")
 
-import time
-import torch
-import torch.nn as nn
-import cv2  # مكتبة OpenCV لمعالجة الصور
-from torchvision import models, transforms
-
 class TrainedModel:
     def __init__(self):
         # تحميل النموذج المدرب مرة واحدة فقط عند إنشاء الكائن
         start_time = time.time()
-
-        # استخدام وحدة المعالجة المركزية دائماً
+        
+        # استخدام وحدة المعالجة المركزية دائماً لتجنب التعقيدات
         self.device = torch.device("cpu")
 
         # تحميل نموذج MobileNetV3-Small
@@ -39,14 +33,13 @@ class TrainedModel:
         model_path = "C:/Users/ccl/Desktop/trained_model_mobilenet.pth"
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
 
-        # تحويل النموذج إلى نسخة TorchScript (JIT compilation) لتحسين الأداء
-        self.model = torch.jit.script(self.model)  # تحويل النموذج إلى TorchScript
+        # وضع النموذج في وضع التقييم وإرساله إلى الجهاز الصحيح (CPU)
         self.model = self.model.to(self.device)
-        self.model.eval()  # التأكد من أن النموذج في وضع التقييم
+        self.model.eval()
 
-        print(f"Model loaded and optimized in {time.time() - start_time:.4f} seconds")
+        print(f"Model loaded in {time.time() - start_time:.4f} seconds")
 
-        # إعدادات المعالجة المسبقة للصورة لمرة واحدة فقط
+        # إعدادات المعالجة المسبقة للصورة لمرة واحدة فقط لتسريع الأداء
         self.preprocess = transforms.Compose([
             transforms.Grayscale(num_output_channels=3),  # تحويل الصورة إلى 3 قنوات (الرمادي)
             transforms.ToTensor(),
@@ -54,16 +47,11 @@ class TrainedModel:
         ])
 
     def preprocess_image(self, img):
-        """دالة معالجة الصورة باستخدام OpenCV لتحسين الأداء"""
-        # تغيير حجم الصورة باستخدام OpenCV
-        resized_image = cv2.resize(img, (160, 90))  # تغيير الحجم مباشرة باستخدام OpenCV
+        """دالة معالجة الصورة بشكل منفصل لتحسين إعادة الاستخدام"""
+        # تغيير حجم الصورة (فقط إذا كان الحجم غير مناسب)
+        pil_image = Image.fromarray(img).resize((160, 90))
         
-        # تحويل الصورة إلى 3 قنوات (تحويل grayscale إذا لم تكن بالفعل)
-        if len(resized_image.shape) == 2 or resized_image.shape[2] == 1:
-            resized_image = cv2.cvtColor(resized_image, cv2.COLOR_GRAY2RGB)
-        
-        # تحويل الصورة إلى Tensor باستخدام إعدادات المعالجة المسبقة
-        pil_image = Image.fromarray(resized_image)
+        # تطبيق عمليات المعالجة المسبقة
         tensor_image = self.preprocess(pil_image).unsqueeze(0).to(self.device)
         return tensor_image
 
@@ -71,14 +59,14 @@ class TrainedModel:
         """تنفيذ التنبؤ باستخدام النموذج على الصورة المدخلة"""
         start_time = time.time()
 
-        # معالجة الصورة مسبقاً باستخدام OpenCV
+        # معالجة الصورة مسبقاً
         tensor_image = self.preprocess_image(img)
         print(f"Image preprocessing took {time.time() - start_time:.4f} seconds")
 
         # توقع النتيجة باستخدام النموذج
         start_time = time.time()
-        with torch.no_grad():  # عدم حفظ التدرجات لتحسين الأداء
-            outputs = self.model(tensor_image).view(-1, 23)  # 23 تصنيفًا (10 أرقام، 3 عمليات، 10 أرقام)
+        with torch.no_grad():  # ضمان عدم حفظ التدرجات لتحسين الأداء
+            outputs = self.model(tensor_image).view(-1, 23)  # نموذج مع 23 تصنيف (10 أرقام، 3 عمليات، 10 أرقام)
 
         print(f"Model prediction took {time.time() - start_time:.4f} seconds")
 
@@ -98,7 +86,6 @@ class TrainedModel:
 
         # إعادة النتيجة النهائية
         return num1_predicted.item(), predicted_operation, num2_predicted.item()
-
 
 class ExpandingCircle:
     def __init__(self, canvas, x, y, max_radius, color):
