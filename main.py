@@ -17,15 +17,21 @@ from datetime import datetime, timedelta
 
 cpu_device = torch.device("cpu")
 
+import time
+import torch
+import torch.nn as nn
+import cv2  # مكتبة OpenCV لمعالجة الصور
+from torchvision import models, transforms
+
 class TrainedModel:
     def __init__(self):
         # تحميل النموذج المدرب مرة واحدة فقط عند إنشاء الكائن
         start_time = time.time()
-        
+
         # استخدام وحدة المعالجة المركزية دائماً
         self.device = torch.device("cpu")
 
-        # استخدام MobileNetV3-Small بدلاً من SqueezeNet لتحقيق كفاءة أعلى
+        # تحميل نموذج MobileNetV3-Small
         self.model = models.mobilenet_v3_small(pretrained=False)
         self.model.classifier[3] = nn.Linear(self.model.classifier[3].in_features, 23)
 
@@ -33,33 +39,47 @@ class TrainedModel:
         model_path = "C:/Users/ccl/Desktop/trained_model_mobilenet.pth"
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
 
-        # وضع النموذج في وضع التقييم وإرساله إلى الجهاز الصحيح (CPU)
+        # تحويل النموذج إلى نسخة TorchScript (JIT compilation) لتحسين الأداء
+        self.model = torch.jit.script(self.model)  # تحويل النموذج إلى TorchScript
         self.model = self.model.to(self.device)
-        self.model.eval()
+        self.model.eval()  # التأكد من أن النموذج في وضع التقييم
 
-        print(f"Model loaded in {time.time() - start_time:.4f} seconds")
+        print(f"Model loaded and optimized in {time.time() - start_time:.4f} seconds")
 
-    def predict(self, img):
-        start_time = time.time()
-
-        # تغيير حجم الصورة باستخدام PIL بدلاً من OpenCV لمزيد من الكفاءة في هذه الحالة
-        pil_image = Image.fromarray(img).resize((160, 90))
-
-        preprocess = transforms.Compose([
+        # إعدادات المعالجة المسبقة للصورة لمرة واحدة فقط
+        self.preprocess = transforms.Compose([
             transforms.Grayscale(num_output_channels=3),  # تحويل الصورة إلى 3 قنوات (الرمادي)
             transforms.ToTensor(),
             transforms.Normalize([0.5], [0.5], [0.5]),
         ])
-        
-        tensor_image = preprocess(pil_image).unsqueeze(0).to(self.device)
 
+    def preprocess_image(self, img):
+        """دالة معالجة الصورة باستخدام OpenCV لتحسين الأداء"""
+        # تغيير حجم الصورة باستخدام OpenCV
+        resized_image = cv2.resize(img, (160, 90))  # تغيير الحجم مباشرة باستخدام OpenCV
+        
+        # تحويل الصورة إلى 3 قنوات (تحويل grayscale إذا لم تكن بالفعل)
+        if len(resized_image.shape) == 2 or resized_image.shape[2] == 1:
+            resized_image = cv2.cvtColor(resized_image, cv2.COLOR_GRAY2RGB)
+        
+        # تحويل الصورة إلى Tensor باستخدام إعدادات المعالجة المسبقة
+        pil_image = Image.fromarray(resized_image)
+        tensor_image = self.preprocess(pil_image).unsqueeze(0).to(self.device)
+        return tensor_image
+
+    def predict(self, img):
+        """تنفيذ التنبؤ باستخدام النموذج على الصورة المدخلة"""
+        start_time = time.time()
+
+        # معالجة الصورة مسبقاً باستخدام OpenCV
+        tensor_image = self.preprocess_image(img)
         print(f"Image preprocessing took {time.time() - start_time:.4f} seconds")
 
         # توقع النتيجة باستخدام النموذج
         start_time = time.time()
-        with torch.no_grad():  # ضمان عدم حفظ التدرجات لتحسين الأداء
-            outputs = self.model(tensor_image).view(-1, 23)  # نموذج مع 23 تصنيف (10 أرقام، 3 عمليات، 10 أرقام)
-        
+        with torch.no_grad():  # عدم حفظ التدرجات لتحسين الأداء
+            outputs = self.model(tensor_image).view(-1, 23)  # 23 تصنيفًا (10 أرقام، 3 عمليات، 10 أرقام)
+
         print(f"Model prediction took {time.time() - start_time:.4f} seconds")
 
         # استخراج التوقعات لكل جزء من العملية الحسابية
@@ -76,12 +96,9 @@ class TrainedModel:
         operation_map = {0: "+", 1: "-", 2: "×"}
         predicted_operation = operation_map[operation_predicted.item()]
 
-        # تحرير الموارد غير الضرورية بعد الاستخدام
-        del tensor_image
-        torch.cuda.empty_cache()
-
         # إعادة النتيجة النهائية
         return num1_predicted.item(), predicted_operation, num2_predicted.item()
+
 
 class ExpandingCircle:
     def __init__(self, canvas, x, y, max_radius, color):
