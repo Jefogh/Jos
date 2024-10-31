@@ -14,79 +14,54 @@ import torchvision.transforms as transforms
 from torchvision import models
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-import concurrent.futures
-import os
-from concurrent.futures import ThreadPoolExecutor
-import psutil  
-from openvino.runtime import Core
-from PIL import Image
+
+cpu_device = torch.device("cpu")
+
 
 class TrainedModel:
-    # متحول ثابت لحفظ النموذج المحمل في الذاكرة
-    cached_model = None
-
     def __init__(self):
-        # تحميل النموذج المدرب مرة واحدة فقط عند إنشاء الكائن
         start_time = time.time()
+        self.model = models.squeezenet1_0(weights=None)
+        self.model.classifier[1] = nn.Conv2d(512, 30, kernel_size=(1, 1), stride=(1, 1))
+        model_path = "C:/Users/ccl/Desktop/trained_model_64x64.pth"
+        self.model.load_state_dict(torch.load(model_path, map_location=cpu_device, weights_only=True))
+        self.model = self.model.to(cpu_device)
+        self.model.eval()
+        print(f"Model loaded in {time.time() - start_time:.4f} seconds")
 
-        # تحديد المسار إلى ملفات OpenVINO IR المحفوظة على سطح المكتب
-        desktop_path = Path.home() / "Desktop" / "openvino_model"
-        model_xml_path = desktop_path / "model.xml"
+    def predict(self, img):
+        start_time = time.time()
+        resized_image = cv2.resize(img, (64, 64))
+        print(f"Image resizing (OpenCV) took {time.time() - start_time:.4f} seconds")
 
-        # تحميل النموذج باستخدام OpenVINO
-        if TrainedModel.cached_model is None:
-            self.core = Core()  # OpenVINO Core
-            self.model = self.core.compile_model(model_xml_path, "CPU")  # استخدام الـ CPU
-            TrainedModel.cached_model = self.model
-            print(f"OpenVINO model loaded in {time.time() - start_time:.4f} seconds")
-        else:
-            # استخدام النموذج المحفوظ في الذاكرة
-            self.model = TrainedModel.cached_model
-            print(f"OpenVINO model retrieved from cache in {time.time() - start_time:.4f} seconds")
-
-        # إعدادات المعالجة المسبقة للصورة لمرة واحدة فقط لتسريع الأداء
-        self.preprocess = transforms.Compose([
-            transforms.Grayscale(num_output_channels=3),  # تحويل الصورة إلى 3 قنوات (الرمادي)
+        pil_image = Image.fromarray(cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB))
+        preprocess = transforms.Compose([
+            transforms.Grayscale(num_output_channels=3),
             transforms.ToTensor(),
             transforms.Normalize([0.5], [0.5], [0.5]),
         ])
-
-    def preprocess_image(self, img):
-        """دالة معالجة الصورة بشكل منفصل لتحسين إعادة الاستخدام"""
-        pil_image = Image.fromarray(img).resize((160, 90))  # تغيير حجم الصورة
-        tensor_image = self.preprocess(pil_image).unsqueeze(0).numpy()  # تحويل إلى numpy
-        return tensor_image
-
-    def predict(self, img):
-        """تنفيذ التنبؤ باستخدام النموذج على الصورة المدخلة"""
-        start_time = time.time()
-
-        # معالجة الصورة مسبقاً
-        input_image = self.preprocess_image(img)
+        tensor_image = preprocess(pil_image).unsqueeze(0).to(cpu_device)
         print(f"Image preprocessing took {time.time() - start_time:.4f} seconds")
 
-        # استدعاء التنبؤ باستخدام OpenVINO
         start_time = time.time()
-        results = self.model.infer_new_request({"input": input_image})  # استخدام OpenVINO للاستدلال
-        print(f"Model prediction with OpenVINO took {time.time() - start_time:.4f} seconds")
+        with torch.no_grad():
+            outputs = self.model(tensor_image).view(-1, 30)
+        print(f"Model prediction took {time.time() - start_time:.4f} seconds")
 
-        # استخراج التوقعات
-        outputs = results["output"].reshape(-1, 23)
-        num1_preds = outputs[:, :10]      # توقع الرقم الأول
-        operation_preds = outputs[:, 10:13]  # توقع العملية (جمع، طرح، ضرب)
-        num2_preds = outputs[:, 13:]      # توقع الرقم الثاني
+        num1_preds = outputs[:, :10]
+        operation_preds = outputs[:, 10:13]
+        num2_preds = outputs[:, 13:]
 
-        # استخراج النتائج النهائية
         _, num1_predicted = torch.max(num1_preds, 1)
         _, operation_predicted = torch.max(operation_preds, 1)
         _, num2_predicted = torch.max(num2_preds, 1)
 
-        # تحويل العمليات إلى الرموز المناسبة
         operation_map = {0: "+", 1: "-", 2: "×"}
         predicted_operation = operation_map[operation_predicted.item()]
 
-        # إعادة النتيجة النهائية
+        del tensor_image
         return num1_predicted.item(), predicted_operation, num2_predicted.item()
+
 
 class ExpandingCircle:
     def __init__(self, canvas, x, y, max_radius, color):
@@ -120,6 +95,7 @@ class ExpandingCircle:
             self.canvas.after_cancel(self.job)
         self.canvas.delete(self.circle)
 
+
 class CaptchaApp:
     def __init__(self, root):
         self.root = root
@@ -138,30 +114,21 @@ class CaptchaApp:
         self.upload_background_button = None
         self.notification_label = None
         self.time_label = None
-
-        # تعيين عدد الخيوط ديناميكيًا بناءً على النظام
-        self.executor = self.dynamic_thread_pool()
+        self.executor = ThreadPoolExecutor(max_workers=4)
 
         self.load_model()
         self.setup_ui()
+        # إضافة مستمع للأزرار
+        self.root.bind('<Control-Key-1>', self.handle_ctrl_1)
 
-    def dynamic_thread_pool(self):
-        """تحديد عدد الخيوط ديناميكيًا بناءً على النظام وحالة المعالجة"""
-        # الحصول على عدد أنوية المعالج
-        num_cores = os.cpu_count()
+    def handle_ctrl_1(self, event):
+        """محاكاة الضغط على أول زر لطلب الكابتشا عند الضغط على Control + 1"""
+        username = list(self.accounts.keys())[0]  # اختيار أول حساب (يمكن تعديل هذا حسب الحاجة)
+        captcha_id1 = self.accounts[username]["captcha_id1"]
+        if captcha_id1:
+            self.request_captcha(username, captcha_id1, None)
 
-        # حساب نسبة استخدام المعالج الحالية باستخدام مكتبة psutil
-        cpu_usage = psutil.cpu_percent(interval=1)
 
-        # إذا كان استخدام المعالج أقل من 50%، نضاعف عدد الخيوط
-        if cpu_usage < 50:
-            max_workers = num_cores * 2
-        else:
-            # في حالة الحمل العالي على المعالج، نقلل عدد الخيوط إلى عدد الأنوية
-            max_workers = num_cores
-
-        print(f"Setting up thread pool with {max_workers} workers (CPU usage: {cpu_usage}%)")
-        return ThreadPoolExecutor(max_workers=max_workers)
     def load_model(self):
         print("Loading model...")
         start_time = time.time()
@@ -184,7 +151,6 @@ class CaptchaApp:
         self.time_label.pack(side=tk.BOTTOM, fill=tk.X)
 
         self.create_widgets()
-
     def create_widgets(self):
         self.add_account_button = tk.Button(self.main_frame, text="Add Account", command=self.add_account)
         self.add_account_button.pack()
@@ -386,62 +352,55 @@ class CaptchaApp:
         captcha_label.image = captcha_image_tk
         captcha_label.grid(row=0, column=0, padx=10, pady=10)
 
-def remove_background_keep_original_colors(self, captcha_image, background_images):
-    # 1. تقليل الدقة لتسريع العملية
-    scale_factor = 0.25
-    captcha_image = cv2.resize(captcha_image, (0, 0), fx=scale_factor, fy=scale_factor)
+    def remove_background_keep_original_colors(self, captcha_image, background_image):
+        # 1. تقليل الدقة بشكل أكبر لتسريع العملية
+        scale_factor = 0.25  # تقليل الدقة بشكل أكبر لتحسين السرعة
+        captcha_image = cv2.resize(captcha_image, (0, 0), fx=scale_factor, fy=scale_factor)
+        background_image = cv2.resize(background_image, (0, 0), fx=scale_factor, fy=scale_factor)
 
-    # التحقق من دعم GPU
-    use_gpu = cv2.cuda.getCudaEnabledDeviceCount() > 0
-
-    def process_background(background_image):
-        # تقليل حجم الخلفية
-        background_image_resized = cv2.resize(background_image, (captcha_image.shape[1], captcha_image.shape[0]))
-
-        if use_gpu:
-            # إذا كان GPU مدعومًا، استخدم CUDA
-            captcha_image_gpu = cv2.cuda.GpuMat()
-            background_image_gpu = cv2.cuda.GpuMat()
+        # 2. إذا كان GPU مدعومًا، استخدم CUDA
+        if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+            captcha_image_gpu = cv2.cuda_GpuMat()
+            background_image_gpu = cv2.cuda_GpuMat()
 
             captcha_image_gpu.upload(captcha_image)
-            background_image_gpu.upload(background_image_resized)
+            background_image_gpu.upload(background_image)
 
-            # حساب الفرق باستخدام GPU
+            # حساب الفرق بين الصورتين باستخدام GPU
             diff_gpu = cv2.cuda.absdiff(captcha_image_gpu, background_image_gpu)
-            gray_gpu = cv2.cuda.cvtColor(diff_gpu, cv2.COLOR_BGR2GRAY)
+            diff = diff_gpu.download()
 
-            # تحويل الفرق إلى صورة رمادية
+            # تحويل الفرق إلى صورة رمادية باستخدام GPU
+            gray_gpu = cv2.cuda.cvtColor(diff_gpu, cv2.COLOR_BGR2GRAY)
             gray = gray_gpu.download()
 
             # تطبيق العتبة (threshold) على الصورة الرمادية
             _, mask = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
 
             # رفع القناع إلى GPU
-            mask_gpu = cv2.cuda.GpuMat()
+            mask_gpu = cv2.cuda_GpuMat()
             mask_gpu.upload(mask)
 
             # إزالة الخلفية مع الحفاظ على الألوان الأصلية باستخدام GPU
             result_gpu = cv2.cuda.bitwise_and(captcha_image_gpu, captcha_image_gpu, mask=mask_gpu)
             result = result_gpu.download()
 
+            return result
         else:
-            # إذا لم يكن GPU مدعومًا، نستخدم المعالج العادي (CPU)
-            diff = cv2.absdiff(captcha_image, background_image_resized)
+            # إذا لم يكن GPU مدعومًا، استخدم الطريقة العادية على المعالج (CPU)
+            # حساب الفرق بين الصورتين
+            diff = cv2.absdiff(captcha_image, background_image)
+
+            # تحويل الفرق إلى صورة رمادية
             gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+
+            # تطبيق العتبة (threshold) على الصورة الرمادية
             _, mask = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
+
+            # إزالة الخلفية مع الحفاظ على الألوان الأصلية
             result = cv2.bitwise_and(captcha_image, captcha_image, mask=mask)
 
-        return result
-
-    # 2. استخدام المعالجة المتوازية لمقارنة الصورة مع الخلفيات
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        # تشغيل مقارنة الخلفية في عدة خيوط
-        processed_images = list(executor.map(process_background, background_images))
-
-    # 3. اختيار أفضل نتيجة بناءً على أقل اختلاف
-    best_image = min(processed_images, key=lambda img: np.sum(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)))
-    
-    return best_image
+            return result
 
     def submit_captcha(self, username, captcha_id, captcha_solution):
         session = self.accounts[username].get("session")
@@ -597,7 +556,7 @@ def remove_background_keep_original_colors(self, captcha_image, background_image
                 if response.status_code == 200:
                     response_data = response.json()
                     return response_data.get("file")
-                elif response.status_code == 429:
+                elif response.status_code == 4295:
                     time.sleep(0.1)
                 elif response.status_code in {401, 403}:
                     if self.login(username, self.accounts[username]["password"], session):
