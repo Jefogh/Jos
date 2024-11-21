@@ -14,54 +14,55 @@ import torchvision.transforms as transforms
 from torchvision import models
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-
-cpu_device = torch.device("cpu")
-
+from openvino.runtime import Core
 
 class TrainedModel:
     def __init__(self):
         start_time = time.time()
-        self.model = models.squeezenet1_0(weights=None)
-        self.model.classifier[1] = nn.Conv2d(512, 30, kernel_size=(1, 1), stride=(1, 1))
-        model_path = "C:/Users/ccl/Desktop/trained_model_64x64.pth"
-        self.model.load_state_dict(torch.load(model_path, map_location=cpu_device, weights_only=True))
-        self.model = self.model.to(cpu_device)
-        self.model.eval()
+
+        # تحميل نموذج OpenVINO
+        model_path = "C:/Users/ccl/Desktop/trained_model.xml"
+        self.core = Core()
+        self.model = self.core.read_model(model=model_path)
+        self.compiled_model = self.core.compile_model(self.model, device_name="GPU")  # لاستخدام المعالج الرسومي المدمج
+        self.input_layer = self.compiled_model.input(0)
+        self.output_layer = self.compiled_model.output(0)
+
         print(f"Model loaded in {time.time() - start_time:.4f} seconds")
 
     def predict(self, img):
         start_time = time.time()
-        resized_image = cv2.resize(img, (64, 64))
+
+        # تغيير حجم الصورة
+        resized_image = cv2.resize(img, (160, 90))
         print(f"Image resizing (OpenCV) took {time.time() - start_time:.4f} seconds")
 
+        # التحويل إلى صيغة مناسبة لـ OpenVINO
         pil_image = Image.fromarray(cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB))
-        preprocess = transforms.Compose([
-            transforms.Grayscale(num_output_channels=3),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5], [0.5]),
-        ])
-        tensor_image = preprocess(pil_image).unsqueeze(0).to(cpu_device)
+        input_image = np.asarray(pil_image).transpose(2, 0, 1).astype(np.float32) / 255.0  # CHW
+        input_image = (input_image - 0.5) / 0.5  # Normalization
+        input_image = np.expand_dims(input_image, axis=0)  # Batch dimension
+
         print(f"Image preprocessing took {time.time() - start_time:.4f} seconds")
 
+        # توقعات النموذج
         start_time = time.time()
-        with torch.no_grad():
-            outputs = self.model(tensor_image).view(-1, 30)
+        outputs = self.compiled_model([input_image])[self.output_layer]
         print(f"Model prediction took {time.time() - start_time:.4f} seconds")
 
+        # تقسيم المخرجات
         num1_preds = outputs[:, :10]
         operation_preds = outputs[:, 10:13]
         num2_preds = outputs[:, 13:]
 
-        _, num1_predicted = torch.max(num1_preds, 1)
-        _, operation_predicted = torch.max(operation_preds, 1)
-        _, num2_predicted = torch.max(num2_preds, 1)
+        num1_predicted = np.argmax(num1_preds, axis=1)
+        operation_predicted = np.argmax(operation_preds, axis=1)
+        num2_predicted = np.argmax(num2_preds, axis=1)
 
         operation_map = {0: "+", 1: "-", 2: "×"}
-        predicted_operation = operation_map[operation_predicted.item()]
+        predicted_operation = operation_map[operation_predicted[0]]
 
-        del tensor_image
-        return num1_predicted.item(), predicted_operation, num2_predicted.item()
-
+        return num1_predicted[0], predicted_operation, num2_predicted[0]
 
 class ExpandingCircle:
     def __init__(self, canvas, x, y, max_radius, color):
@@ -118,16 +119,6 @@ class CaptchaApp:
 
         self.load_model()
         self.setup_ui()
-        # إضافة مستمع للأزرار
-        self.root.bind('<Control-Key-1>', self.handle_ctrl_1)
-
-    def handle_ctrl_1(self, event):
-        """محاكاة الضغط على أول زر لطلب الكابتشا عند الضغط على Control + 1"""
-        username = list(self.accounts.keys())[0]  # اختيار أول حساب (يمكن تعديل هذا حسب الحاجة)
-        captcha_id1 = self.accounts[username]["captcha_id1"]
-        if captcha_id1:
-            self.request_captcha(username, captcha_id1, None)
-
 
     def load_model(self):
         print("Loading model...")
@@ -151,6 +142,7 @@ class CaptchaApp:
         self.time_label.pack(side=tk.BOTTOM, fill=tk.X)
 
         self.create_widgets()
+
     def create_widgets(self):
         self.add_account_button = tk.Button(self.main_frame, text="Add Account", command=self.add_account)
         self.add_account_button.pack()
@@ -269,7 +261,7 @@ class CaptchaApp:
                 if response.status_code == 200:
                     response_data = response.json()
                     return response_data.get("file")
-                elif response.status_code == 429:
+                elif response.status_code == 4295:
                     # في حالة تجاوز الحد، نعيد المحاولة
                     time.sleep(0.1)
                 elif response.status_code in {401, 403}:
@@ -353,12 +345,12 @@ class CaptchaApp:
         captcha_label.grid(row=0, column=0, padx=10, pady=10)
 
     def remove_background_keep_original_colors(self, captcha_image, background_image):
-        # 1. تقليل الدقة بشكل أكبر لتسريع العملية
-        scale_factor = 0.25  # تقليل الدقة بشكل أكبر لتحسين السرعة
+        # 1. تقليل الدقة لتسريع العملية
+        scale_factor = 0.5
         captcha_image = cv2.resize(captcha_image, (0, 0), fx=scale_factor, fy=scale_factor)
         background_image = cv2.resize(background_image, (0, 0), fx=scale_factor, fy=scale_factor)
 
-        # 2. إذا كان GPU مدعومًا، استخدم CUDA
+        # 2. إذا كان GPU مدعومًا، استخدم CUDA لإزالة الخلفية
         if cv2.cuda.getCudaEnabledDeviceCount() > 0:
             captcha_image_gpu = cv2.cuda_GpuMat()
             background_image_gpu = cv2.cuda_GpuMat()
@@ -370,7 +362,7 @@ class CaptchaApp:
             diff_gpu = cv2.cuda.absdiff(captcha_image_gpu, background_image_gpu)
             diff = diff_gpu.download()
 
-            # تحويل الفرق إلى صورة رمادية باستخدام GPU
+            # تحويل الفرق إلى صورة رمادية
             gray_gpu = cv2.cuda.cvtColor(diff_gpu, cv2.COLOR_BGR2GRAY)
             gray = gray_gpu.download()
 
@@ -387,19 +379,11 @@ class CaptchaApp:
 
             return result
         else:
-            # إذا لم يكن GPU مدعومًا، استخدم الطريقة العادية على المعالج (CPU)
-            # حساب الفرق بين الصورتين
+            # إذا لم يكن GPU مدعومًا، نستخدم الطريقة العادية
             diff = cv2.absdiff(captcha_image, background_image)
-
-            # تحويل الفرق إلى صورة رمادية
             gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-
-            # تطبيق العتبة (threshold) على الصورة الرمادية
             _, mask = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
-
-            # إزالة الخلفية مع الحفاظ على الألوان الأصلية
             result = cv2.bitwise_and(captcha_image, captcha_image, mask=mask)
-
             return result
 
     def submit_captcha(self, username, captcha_id, captcha_solution):
@@ -418,21 +402,21 @@ class CaptchaApp:
     @staticmethod
     def generate_user_agent():
         user_agent_list = [
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (Linux; Android 11; SM-G996B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.210 Mobile Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0",
-        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36",
-        "Mozilla/5.0 (Linux; Android 10; Pixel 3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.101 Mobile Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.64",
-        "Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.2 Safari/605.1.15",
-        "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0",
-        "Mozilla/5.0 (Linux; Android 9; SAMSUNG SM-A505FN) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.111 Mobile Safari/537.36",
-        "Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1.2 Safari/605.1.15",
-        "Mozilla/5.0 (X11; FreeBSD amd64; rv:91.0) Gecko/20100101 Firefox/91.0"
-    ]
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (Linux; Android 11; SM-G996B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.210 Mobile Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0",
+            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36",
+            "Mozilla/5.0 (Linux; Android 10; Pixel 3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.101 Mobile Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.64",
+            "Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.2 Safari/605.1.15",
+            "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0",
+            "Mozilla/5.0 (Linux; Android 9; SAMSUNG SM-A505FN) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.111 Mobile Safari/537.36",
+            "Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1.2 Safari/605.1.15",
+            "Mozilla/5.0 (X11; FreeBSD amd64; rv:91.0) Gecko/20100101 Firefox/91.0"
+        ]
 
         return random.choice(user_agent_list)
 
@@ -556,7 +540,7 @@ class CaptchaApp:
                 if response.status_code == 200:
                     response_data = response.json()
                     return response_data.get("file")
-                elif response.status_code == 4295:
+                elif response.status_code == 429:
                     time.sleep(0.1)
                 elif response.status_code in {401, 403}:
                     if self.login(username, self.accounts[username]["password"], session):
@@ -591,6 +575,7 @@ class CaptchaApp:
         session = requests.Session()
         session.headers.update(headers)
         return session
+
     def login(self, username, password, session, retry_count=3):
         login_url = "https://api.ecsc.gov.sy:8080/secure/auth/login"
         login_data = {"username": username, "password": password}
