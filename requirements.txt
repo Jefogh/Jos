@@ -1,9 +1,10 @@
 base64
-torch
-torchvision
-openvino-dev
-numpy
-opencv-python
-Pillow
-requests
+random
+torch==2.5.1
+torchvision==0.20.1
+numpy==1.26.4
+opencv-python==4.9.0
+Pillow==10.4.0
 tk
+requests==2.32.3
+openvino==2024.5.0
