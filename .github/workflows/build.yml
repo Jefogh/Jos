@@ -22,8 +22,14 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install base64 torch torchvision openvino-dev numpy opencv-python Pillow requests tk
-        pip install pyinstaller
+        pip install \
+          torch torchvision \
+          openvino-dev \
+          numpy \
+          opencv-python \
+          Pillow \
+          requests \
+          pyinstaller
 
     - name: Package as EXE
       run: |
