@@ -11,35 +11,35 @@ jobs:
     runs-on: windows-latest
 
     steps:
+    # Step 1: Checkout code
     - name: Checkout code
       uses: actions/checkout@v3
 
+    # Step 2: Set up Python environment
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'  # استخدم إصدار Python المتوافق مع المكتبات
+        python-version: '3.9'  # Ensure compatibility with required libraries
 
+    # Step 3: Install dependencies
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install numpy
-        pip install torch
-        pip install torchvision
-        pip install pillow
-        pip install requests
-        pip install tk
-        pip install pyinstaller
-        pip install opencv-python
-        pip install openvino
+        pip install numpy torch torchvision pillow requests tk pyinstaller opencv-python openvino
 
+    # Step 4: Verify installed dependencies
     - name: Verify dependencies
       run: |
-        python -m pip check  # للتحقق من أن جميع المكتبات متوافقة
+        python -m pip check  # Check for conflicts in installed libraries
 
+    # Step 5: Build the EXE
     - name: Build EXE
       run: |
         pyinstaller --onefile --windowed -n captcha_solver main.py
+      env:
+        PYTHONUTF8: "1"  # Ensure UTF-8 encoding is enabled
 
+    # Step 6: Upload the EXE as an artifact
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
