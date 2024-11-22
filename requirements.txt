@@ -1,8 +1,9 @@
-numpy
+base64
 torch
 torchvision
-opencv-python
-pillow
-requests
-pyinstaller
 openvino-dev
+numpy
+opencv-python
+Pillow
+requests
+tk
