@@ -1,42 +1,46 @@
-name: Build EXE for Windows
+name: Build Windows Desktop Application
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Install Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install openvino-dev
-        pip install torch torchvision
-        pip install numpy
-        pip install  opencv-python
-        pip install pillow
-        pip install requests
-        pip install PyInstaller
-        pip install openvino
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+                  pip install openvino-dev
+                  pip install torch torchvision
+                  pip install numpy
+                  pip install  opencv-python
+                  pip install pillow
+                  pip install requests
+                  pip install PyInstaller
+                  pip install openvino
+# تثبيت المتطلبات من requirements.txt
 
-    - name: Package as EXE
-      run: |
-        pyinstaller --onefile --noconsole --name CaptchaApp main.py
+      - name: Build executable with PyInstaller
+        run: |
+          pip install pyinstaller  # تأكد من تثبيت PyInstaller
+          pyinstaller --onefile --windowed --name salkhhm main.py
 
-    - name: Upload EXE Artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: CaptchaApp
-        path: dist/CaptchaApp.exe
+      - name: List dist directory contents
+        run: dir dist
+
+      - name: Upload Executable
+        uses: actions/upload-artifact@v3
+        with:
+          name: salkhhm-Executable
+          path: dist/salkhhm.exe
