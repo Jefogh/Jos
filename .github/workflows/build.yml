@@ -22,7 +22,7 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install base64 torch torchvision openvino-dev numpy opencv-python Pillow requests tk
         pip install pyinstaller
 
     - name: Package as EXE
