@@ -29,7 +29,8 @@ jobs:
           opencv-python \
           Pillow \
           requests \
-          pyinstaller
+          pyinstaller \
+          openvino
 
     - name: Package as EXE
       run: |
