@@ -1,46 +1,50 @@
-name: Build Windows Executable
+name: Windows CI/CD for Captcha Solver
 
 on:
   push:
     branches:
-      - main  # يتم تشغيل الـ Workflow عند دفع التغييرات على الفرع الرئيسي
+      - main
   pull_request:
     branches:
       - main
 
 jobs:
-  build:
+  build-and-test:
     runs-on: windows-latest
 
     steps:
-      # 1. Checkout the code
-      - name: Checkout code
-        uses: actions/checkout@v3
+    # Step 1: Checkout the repository
+    - name: Checkout Code
+      uses: actions/checkout@v3
 
-      # 2. Setup Python
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.9"  # الإصدار المناسب
+    # Step 2: Set up Python
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      # 3. Install dependencies
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+    # Step 3: Install dependencies
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install opencv-python-headless
+        pip install torch torchvision
+        pip install openvino-dev
+        pip install pillow requests numpy
+        
+    # Step 4: Validate OpenVINO installation
+    - name: Verify OpenVINO installation
+      run: |
+        python -c "from openvino.runtime import Core; print('OpenVINO Installed Successfully')"
 
-      # 4. Install PyInstaller
-      - name: Install PyInstaller
-        run: pip install pyinstaller
+    # Step 5: Run the application
+    - name: Run Application
+      run: |
+        python main.py
 
-      # 5. Build the executable
-      - name: Build executable
-        run: |
-          pyinstaller --onefile --noconsole app/main.py
-
-      # 6. Upload artifact (executable file)
-      - name: Upload executable
-        uses: actions/upload-artifact@v3
-        with:
-          name: app-executable
-          path: dist/main.exe  # مسار الملف التنفيذي الناتج
+    # Step 6: Run Linter (Optional)
+    - name: Run Linter
+      run: |
+        pip install flake8
+        flake8 --max-line-length=120 .
