@@ -20,12 +20,12 @@ class TrainedModel:
     def __init__(self):
         start_time = time.time()
 
-        # Ensure the model path is dynamically set and exists
-        model_path = os.path.join(os.getcwd(), "models", "trained_model.onnx")
+        # مسار النموذج
+        model_path = r"C:\Users\ccl\Desktop\hack\trained_model.onnx"
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found at {model_path}")
 
-        # Load OpenVINO model
+        # تحميل النموذج باستخدام OpenVINO
         self.core = Core()
         self.model = self.core.read_model(model=model_path)
         self.compiled_model = self.core.compile_model(self.model, device_name="GPU")
@@ -33,7 +33,7 @@ class TrainedModel:
         self.output_layer = self.compiled_model.output(0)
 
         print(f"Model loaded in {time.time() - start_time:.4f} seconds")
-
+        
     def predict(self, img):
         start_time = time.time()
 
